@@ -1,0 +1,82 @@
+import io
+import os
+import time
+from google.cloud import speech
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+# Initialize SentimentIntensityAnalyzer
+analyzer = SentimentIntensityAnalyzer()
+
+# Define spam keywords
+spam_keywords = ["free vacation", "winning lottery", "urgent problem with your account", "exclusive offer"]
+
+def transcribe_call_google(audio_content):
+    """Transcribes a call using Google Cloud Speech-to-Text."""
+    client = speech.SpeechClient()
+    audio = speech.RecognitionAudio(content=audio_content)
+    config = speech.RecognitionConfig(
+        encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+        sample_rate_hertz=16000,
+        language_code="en-US",
+    )
+    response = client.recognize(config=config, audio=audio)
+    return " ".join(result.alternatives[0].transcript for result in response.results)
+
+def analyze_sentiment(text):
+    """Analyzes the sentiment of a given text input."""
+    scores = analyzer.polarity_scores(text)
+    return "Positive" if scores["compound"] >= 0.05 else "Negative" if scores["compound"] <= -0.05 else "Neutral", scores
+
+def contains_spam_keywords(text):
+    """Check if the text contains any spam keywords."""
+    for keyword in spam_keywords:
+        if keyword in text.lower():
+            return True
+    return False
+
+def classify_call(transcription, sentiment, scores):
+    """Classifies a call as Ham or Spam based on sentiment analysis and keyword detection."""
+    if contains_spam_keywords(transcription):
+        return "Spam"
+    elif sentiment == "Positive" and scores["pos"] >= 0.7:
+        return "Ham"
+    elif sentiment == "Negative" and scores["neg"] >= 0.6:
+        return "Spam"
+    else:
+        return "Uncertain"
+
+def process_call(call_id):
+    """Processes a call in real-time and classifies it as Ham or Spam."""
+    print(f"Processing call: {call_id}")
+    
+    audio_data = []
+    for i in range(4):
+        audio_chunk = receive_audio(call_id, 5)
+        audio_data.extend(audio_chunk)
+        
+        audio_content = bytes(audio_data)
+        transcription = transcribe_call_google(audio_content)
+        sentiment, scores = analyze_sentiment(transcription)
+        classification = classify_call(transcription, sentiment, scores)
+        
+        print(f"Chunk {i+1} - Transcription: {transcription[:50]}... Sentiment: {sentiment}, Classification: {classification}")
+        
+        if classification == "Spam":
+            print(f"Call {call_id} classified as Spam. Ending the call.")
+            end_call(call_id)
+            return
+    
+    print(f"Call {call_id} ended without being classified as Spam.")
+
+def receive_audio(call_id, duration):
+    """Simulates receiving audio data for a specified duration."""
+    audio_data = [0] * (16000 * duration)  # Simulated audio data
+    return audio_data
+
+def end_call(call_id):
+    """Simulates ending a call."""
+    print(f"Ending call: {call_id}")
+
+# Example Usage
+incoming_call_id = "123456789"
+process_call(incoming_call_id)
