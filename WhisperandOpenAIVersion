@@ -1,0 +1,66 @@
+import whisper
+import requests
+import os
+import time
+
+# Initialize the Whisper model
+model = whisper.load_model("base")
+
+def transcribe_with_whisper(audio_content):
+    """Transcribes a call using Whisper."""
+    result = model.transcribe(audio_content)
+    return result['text']
+
+def classify_call_with_gpt(transcription):
+    """Classifies a call as Ham or Spam using GPT 3.5."""
+    api_url = "https://api.openai.com/v1/engines/davinci/completions"
+    headers = {
+        "Authorization": f"Bearer YOUR_OPENAI_API_KEY",
+        "Content-Type": "application/json"
+    }
+    prompt = f"Determine if the following conversation is a spam or a legitimate call: {transcription}"
+    data = {
+        "prompt": prompt,
+        "max_tokens": 50
+    }
+    response = requests.post(api_url, json=data, headers=headers)
+    if response.status_code == 200:
+        return response.json()['choices'][0]['text'].strip()
+    else:
+        print("Failed to classify call with GPT-3.5")
+        return "Uncertain"
+
+def process_call(call_id):
+    """Processes a call in real-time and classifies it as Ham or Spam."""
+    print(f"Processing call: {call_id}")
+
+    audio_data = []
+    for i in range(4):
+        audio_chunk = receive_audio(call_id, 5)
+        audio_data.extend(audio_chunk)
+        
+        audio_content = bytes(audio_data)
+        transcription = transcribe_with_whisper(audio_content)
+        classification = classify_call_with_gpt(transcription)
+        
+        print(f"Chunk {i+1} - Transcription: {transcription[:50]}... Classification: {classification}")
+        
+        if classification.lower() == "spam":
+            print(f"Call {call_id} classified as Spam. Ending the call.")
+            end_call(call_id)
+            return
+
+    print(f"Call {call_id} ended without being classified as Spam.")
+
+def receive_audio(call_id, duration):
+    """Simulates receiving audio data for a specified duration."""
+    audio_data = [0] * (16000 * duration)  # Simulated audio data
+    return audio_data
+
+def end_call(call_id):
+    """Simulates ending a call."""
+    print(f"Ending call: {call_id}")
+
+# Example Usage
+incoming_call_id = "123456789"
+process_call(incoming_call_id)
